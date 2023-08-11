@@ -4,10 +4,10 @@
 
 Install OpenResty [like this](https://openresty.org/en/installation.html).
 
-Add this to your .bashrc and restart bash:
+Install apache's benchmark tester `ab`:
 
 ```shell
-export PATH=$PATH:/usr/local/openresty/nginx/sbin
+apt install apache2-utils
 ```
 
 Start your server:
@@ -19,7 +19,9 @@ make nginx
 Test that it's working:
 
 ```shell
-make test
+$ make test
+curl http://localhost:8080/
+<p>hello, world</p>
 ```
 
 Benchmark:
