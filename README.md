@@ -30,3 +30,18 @@ Benchmark:
 make benchmark
 ```
 
+## Troubleshooting
+
+### Too many open files
+
+If you get this error when you run `make benchmark` then the benchmarking is trying to make more simultaneous requests than your user allows. Check the number of requests your user is allowed as follows:
+
+```shell
+$ ulimit -Hn
+1048576
+$ ulimit -Sn
+1024
+```
+
+These numbers should be significantly greater than the `-c<connections>` parameter in the `ab` command run by `make benchmark`. If not, see how to increase your open file limit [here](https://www.cyberciti.biz/faq/linux-unix-nginx-too-many-open-files/) or [here for Ubuntu](https://manage.accuwebhosting.com/knowledgebase/3334/How-to-Increase-Open-Files-Limit-in-Ubuntu.html).
+
