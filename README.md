@@ -2,12 +2,13 @@
 
 ## Installation
 
-Install OpenResty [like this](https://openresty.org/en/installation.html).
+Here are instructions to install [OpenResty](https://openresty.org/en/installation.html) and [LuaRocks](https://luarocks.org/#quick-start).
 
-Install apache's benchmark tester `ab`:
+Next install Apache Benchmark and an fcgi header file ( `ab`, `fcgi_stdio.h`), then the LuaRock `wsapi-fcgi`. These instructions work on Ubuntu:
 
 ```shell
-apt install apache2-utils
+sudo apt-get install apache2-utils libfcgi-dev
+sudo luarocks install wsapi-fcgi
 ```
 
 Start your server:
@@ -16,7 +17,7 @@ Start your server:
 make nginx
 ```
 
-Test that it's working:
+Test that nginx is working:
 
 ```shell
 $ make test
@@ -24,7 +25,7 @@ curl http://localhost:8080/
 <p>hello, world</p>
 ```
 
-Benchmark:
+Run the benchmark:
 
 ```shell
 make benchmark
