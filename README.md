@@ -11,25 +11,44 @@ sudo apt-get install apache2-utils libfcgi-dev
 sudo luarocks install wsapi-fcgi
 ```
 
-Start your server:
+Start your nginx server and fcgi server:
 
 ```shell
-make nginx
+make start
 ```
 
 Test that nginx is working:
 
 ```shell
 $ make test
-curl http://localhost:8080/
+curl http://localhost:8081/ && echo Success
 <p>hello, world</p>
+Success
+curl http://localhost:8082/ && echo Success
+<html><body><p>Hello Wsapi!</p><p>PATH_INFO: /</p><p>SCRIPT_NAME: /run.lua</p></body></html>
+Success
 ```
 
-Run the benchmark:
+Run the benchmarks:
 
 ```shell
-make benchmark
+make benchmarks
 ```
+
+## Results
+
+The benchmark results on a quad-core i7-8565 @1.8GHz are as follows, where 8081 is port serving OpenResty's Lua and 8082 is PUC Lua via FastCGI:
+
+```shell
+$ make summary
+make benchmark | egrep "^ab|Time taken"
+ab -k -c1000 -n50000 -S http://localhost:8081/ 2> >(egrep -v "(Completed|Finished).*requests" 1>&2)
+Time taken for tests:   0.425 seconds
+ab -k -c1000 -n50000 -S http://localhost:8082/ 2> >(egrep -v "(Completed|Finished).*requests" 1>&2)
+Time taken for tests:   3.369 seconds
+```
+
+In short, OpenResty's Lua solution is over **8× faster** than PUC Lua via FastCGI.
 
 ## Troubleshooting
 
