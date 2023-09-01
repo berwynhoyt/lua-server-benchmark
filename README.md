@@ -41,14 +41,13 @@ The benchmark results on a quad-core i7-8565 @1.8GHz are as follows, where 8081 
 
 ```shell
 $ make summary
-make benchmark | egrep "^ab|Time taken"
-ab -k -c1000 -n50000 -S http://localhost:8081/ 2> >(egrep -v "(Completed|Finished).*requests" 1>&2)
-Time taken for tests:   0.425 seconds
-ab -k -c1000 -n50000 -S http://localhost:8082/ 2> >(egrep -v "(Completed|Finished).*requests" 1>&2)
-Time taken for tests:   3.369 seconds
+ab -k -c1000 -n50000 -S "http://localhost:8081/" 2> >(grep -v " requests")
+Time taken for tests:   0.455 seconds
+ab -k -c1000 -n50000 -S "http://localhost:8082/" 2> >(grep -v " requests")
+Time taken for tests:   3.629 seconds
 ```
 
-In short, OpenResty's Lua solution is over **8× faster** than PUC Lua via FastCGI.
+In short, OpenResty's Lua solution is about **8× faster** than PUC Lua via FastCGI.
 
 ## Troubleshooting
 

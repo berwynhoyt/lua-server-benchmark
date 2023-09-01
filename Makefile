@@ -2,6 +2,9 @@
 
 SHELL := /bin/bash
 
+REQUEST :=
+#REQUEST := multiply?a=2&b=3
+
 PORT_RESTY := 8081
 PORT_FCGI := 8082
 FCGI_SOCKET := /tmp/nginx-fcgi-benchmark.sock
@@ -30,7 +33,7 @@ nginx: nginx/logs/nginx.pid .reload
 	$(if $(IS_NGINX), , $(RUN_NGINX))
 nginx/logs/nginx.pid:
 	$(RUN_NGINX)
-.reload: nginx/conf/nginx.conf Makefile
+.reload: nginx/conf/nginx.conf Makefile www/app.lua
 	@echo Reloading server config
 	@touch .reload
 	$(if $(IS_NGINX), $(RUN_NGINX) -s reload && sleep 0.1, $(RUN_NGINX))
@@ -49,20 +52,20 @@ stop-fcgi:
 test: test-resty test-fcgi
 test-resty: nginx
 	@echo Testing resty server
-	curl -fso /dev/null http://localhost:$(PORT_RESTY)/
+	curl -fs "http://localhost:$(PORT_RESTY)/$(REQUEST)"
 test-fcgi: nginx fcgi
 	@echo Testing fcgi server
-	curl -fso /dev/null http://localhost:$(PORT_FCGI)/
+	curl -fs "http://localhost:$(PORT_FCGI)/$(REQUEST)"
 
 benchmarks benchmark: benchmark-resty benchmark-fcgi
 benchmark-resty: test-resty
 	@echo Benchmarking openresty LuaJIT
-	ab -k -c1000 -n50000 -S http://localhost:$(PORT_RESTY)/ 2> >(egrep -v "(Completed|Finished).*requests" 1>&2)
+	ab -k -c1000 -n50000 -S "http://localhost:$(PORT_RESTY)/$(REQUEST)" 2> >(grep -v " requests")
 benchmark-fcgi: test-fcgi
 	@echo Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')
-	ab -k -c1000 -n50000 -S http://localhost:$(PORT_FCGI)/ 2> >(egrep -v "(Completed|Finished).*requests" 1>&2)
+	ab -k -c1000 -n50000 -S "http://localhost:$(PORT_FCGI)/$(REQUEST)" 2> >(grep -v " requests")
 summary:
-	$(MAKE) benchmark | egrep "^ab|Time taken"
+	@$(MAKE) benchmark | egrep "^ab|Time taken"
 
 # Define a newline macro -- only way to use use \n in info output. Note: needs two newlines after 'define' line
 define \n
