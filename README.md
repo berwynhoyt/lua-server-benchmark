@@ -4,14 +4,16 @@
 
 Here are instructions to install [OpenResty](https://openresty.org/en/installation.html) and [LuaRocks](https://luarocks.org/#quick-start).
 
-Next install Apache Benchmark and an fcgi header file ( `ab`, `fcgi_stdio.h`), then the LuaRock `wsapi-fcgi`. These instructions work on Ubuntu:
+Next install what we need for our specific benchmarks. These instructions work on Ubuntu:
 
 ```shell
-sudo apt-get install apache2-utils libfcgi-dev
+apt install apache2-utils  # supplies ab, the apache benchmark tool
+apt install libfcgi-dev    # supplies fcgi_stdio.h
 sudo luarocks install wsapi-fcgi
+apt install lua5.1 liblua5.1-dev  # required to build uWSGI with lua support
 ```
 
-Start your nginx server and fcgi server:
+Start your nginx and fcgi servers:
 
 ```shell
 make start
