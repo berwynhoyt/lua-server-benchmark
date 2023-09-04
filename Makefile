@@ -16,17 +16,17 @@ NGINX := $(shell which nginx >/dev/null && echo nginx || echo /usr/local/openres
 RUN_NGINX := $(NGINX) -p nginx -c conf/nginx.conf
 STOP_NGINX := $(RUN_NGINX) -s quit
 
-RUN_FCGI := spawn-fcgi -F 10 -s $(SOCKET_FCGI) -P fcgi.pid -d www -- $(LUA) fcgi-run.lua
+RUN_FCGI := spawn-fcgi -F 1 -s $(SOCKET_FCGI) -P fcgi.pid -d www -- $(LUA) fcgi-run.lua
 STOP_FCGI := kill -9 `cat fcgi.pid` && rm -f fcgi.pid
 
-RUN_UWSGI := build/uwsgi/uwsgi --http :8083 --http-modifier1 6 --lua www/uwsgi-app.lua -L --async 10 --processes 8 &
-#RUN_UWSGI := build/uwsgi/uwsgi --socket $(SOCKET_UWSGI) --lua www/uwsgi-app.lua -L --async 10 --processes 8 &
+#RUN_UWSGI := build/uwsgi/uwsgi --http :8083 --http-modifier1 6 --lua www/uwsgi-app.lua -L --async 10 --processes 8 &
+RUN_UWSGI := build/uwsgi/uwsgi --socket $(SOCKET_UWSGI) --lua www/uwsgi-app.lua -L --logto nginx/logs/uwsgi.log --processes 10 &
 STOP_UWSGI := killall uwsgi
 
 IS_NGINX = $(shell lsof -i TCP:$(PORT_RESTY) &>/dev/null && echo yes)
 IS_FCGI = $(shell lsof -a -U -- $(SOCKET_FCGI) &>/dev/null && echo yes)
-IS_UWSGI = $(shell lsof -i TCP:$(PORT_UWSGI) &>/dev/null && echo yes)
-#IS_UWSGI = $(shell lsof -a -U -- $(SOCKET_UWSGI) &>/dev/null && echo yes)
+#IS_UWSGI = $(shell lsof -i TCP:$(PORT_UWSGI) &>/dev/null && echo yes)
+IS_UWSGI = $(shell lsof -a -U -- $(SOCKET_UWSGI) &>/dev/null && echo yes)
 
 UWSGI_SOURCE := https://github.com/unbit/uwsgi.git
 
@@ -40,18 +40,20 @@ reload: | force-reload .reload
 force-reload:
 	@touch nginx/conf/nginx.conf
 
-benchmarks benchmark: benchmark-resty benchmark-fcgi
-benchmark-resty: test-resty
-	@echo Benchmarking openresty LuaJIT
-	ab -k -c1000 -n50000 -S "http://localhost:$(PORT_RESTY)/$(REQUEST)" 2> >(grep -v " requests")
-benchmark-fcgi: test-fcgi
-	@echo Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')
-	ab -k -c100 -n50000 -S "http://localhost:$(PORT_FCGI)/$(REQUEST)" 2> >(grep -v " requests")
-benchmark-uwsgi: test-uwsgi
-	@echo Benchmarking uWSGI
-	ab -k -c100 -n50000 -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)" 2> >(grep -v " requests")
 summary:
 	@$(MAKE) benchmark | egrep "^ab|Time taken"
+benchmarks benchmark: benchmark-resty benchmark-fcgi
+benchmark-resty: | restrict-cpu test-resty
+	@echo Benchmarking openresty LuaJIT
+	ab -k -c1000 -n50000 -S "http://localhost:$(PORT_RESTY)/$(REQUEST)" 2> >(grep -v " requests")
+benchmark-fcgi: | restrict-cpu test-fcgi
+	@echo Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')
+	ab -k -c100 -n50000 -S "http://localhost:$(PORT_FCGI)/$(REQUEST)" 2> >(grep -v " requests")
+benchmark-uwsgi: | restrict-cpu test-uwsgi
+	@echo Benchmarking uWSGI
+	./on-cpu 0 ab -k -c100 -n50000 -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)" 2> >(grep -v " requests")
+restrict-cpu:
+	./restrict-cpu
 
 test: test-resty test-fcgi
 test-resty: nginx
@@ -113,7 +115,7 @@ vars:
 
 .PHONY: all start stop reload force-reload
 .PHONY: test test-resty test-fcgi
-.PHONY: benchmarks benchmark benchmark-resty benchmark-fcgi summary
+.PHONY: summary benchmarks benchmark benchmark-resty benchmark-fcgi restrict-cpu
 .PHONY: nginx nginx-stop
 .PHONY: fcgi fcgi-stop
 .PHONY: uwsgi uwsgi-stop

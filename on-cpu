@@ -1,0 +1,8 @@
+#!/bin/bash
+# Usage: on-cpu n command args...
+#   where n is the CPU number or number range (e.g. 1-4) to run the command on
+# Runs command as root. This may be changed by removing 'sudo' but linux will then ask the user for a password every time it is run
+
+CPU=$1
+shift
+sudo systemd-run --scope -p AllowedCPUs=$CPU -- "$@"

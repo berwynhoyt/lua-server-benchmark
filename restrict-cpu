@@ -1,0 +1,12 @@
+#!/bin/bash
+# Sets all CPUs except 0 may be used by subsequently created user processes.
+# Usage: set-cpus <n>
+#   where n is the CPU range to restrict user process to (default = 1-last)
+
+last_cpu=$(lscpu | egrep "(On|Off)-line CPU" | tail -1 | grep -o "[0-9]*$")
+range=1-
+[[ "$1" != "" ]] && range="$1"
+[[ "$range" == *- ]] && range="$range$last_cpu"
+
+echo Restricting user processes to CPUs "$range"
+sudo systemctl set-property --runtime -- 'user.slice' AllowedCPUs="$range"

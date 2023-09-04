@@ -9,6 +9,7 @@ Next install what we need for our specific benchmarks. These instructions work o
 ```shell
 apt install apache2-utils  # supplies ab, the apache benchmark tool
 apt install libfcgi-dev    # supplies fcgi_stdio.h
+apt install parallel       # use GNU version of parallel to load uwsgi instead of canonical's version (on Ubuntu)
 sudo luarocks install wsapi-fcgi
 apt install lua5.1 liblua5.1-dev  # required to build uWSGI with lua support
 ```
