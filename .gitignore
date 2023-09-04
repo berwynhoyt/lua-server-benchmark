@@ -2,3 +2,4 @@ fcgi.pid
 nginx
 build
 .reload
+myps

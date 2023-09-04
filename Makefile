@@ -19,13 +19,12 @@ STOP_NGINX := $(RUN_NGINX) -s quit
 RUN_FCGI := spawn-fcgi -F 1 -s $(SOCKET_FCGI) -P fcgi.pid -d www -- $(LUA) fcgi-run.lua
 STOP_FCGI := kill -9 `cat fcgi.pid` && rm -f fcgi.pid
 
-#RUN_UWSGI := build/uwsgi/uwsgi --http :8083 --http-modifier1 6 --lua www/uwsgi-app.lua -L --async 10 --processes 8 &
-RUN_UWSGI := build/uwsgi/uwsgi --socket $(SOCKET_UWSGI) --lua www/uwsgi-app.lua -L --logto nginx/logs/uwsgi.log --processes 10 &
+#The following line should, in theory, be faster with --async 100 or --processes 7, but it's slower. What am I missing about parallel servicing?
+RUN_UWSGI := build/uwsgi/uwsgi --socket $(SOCKET_UWSGI) --lua www/uwsgi-app.lua -L --logto nginx/logs/uwsgi.log &
 STOP_UWSGI := killall uwsgi
 
 IS_NGINX = $(shell lsof -i TCP:$(PORT_RESTY) &>/dev/null && echo yes)
 IS_FCGI = $(shell lsof -a -U -- $(SOCKET_FCGI) &>/dev/null && echo yes)
-#IS_UWSGI = $(shell lsof -i TCP:$(PORT_UWSGI) &>/dev/null && echo yes)
 IS_UWSGI = $(shell lsof -a -U -- $(SOCKET_UWSGI) &>/dev/null && echo yes)
 
 UWSGI_SOURCE := https://github.com/unbit/uwsgi.git
@@ -41,30 +40,28 @@ force-reload:
 	@touch nginx/conf/nginx.conf
 
 summary:
-	@$(MAKE) benchmark | egrep "^ab|Time taken"
-benchmarks benchmark: benchmark-resty benchmark-fcgi
-benchmark-resty: | restrict-cpu test-resty
+	@$(MAKE) benchmark 2> >(grep -v " requests") 1> >(egrep "^ab|Time taken")
+benchmarks benchmark: | benchmark-resty benchmark-fcgi benchmark-uwsgi
+benchmark-resty: test-resty
 	@echo Benchmarking openresty LuaJIT
-	ab -k -c1000 -n50000 -S "http://localhost:$(PORT_RESTY)/$(REQUEST)" 2> >(grep -v " requests")
-benchmark-fcgi: | restrict-cpu test-fcgi
+	ab -k -c1000 -n50000 -S "http://localhost:$(PORT_RESTY)/$(REQUEST)"
+benchmark-fcgi: test-fcgi
 	@echo Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')
-	ab -k -c100 -n50000 -S "http://localhost:$(PORT_FCGI)/$(REQUEST)" 2> >(grep -v " requests")
-benchmark-uwsgi: | restrict-cpu test-uwsgi
+	ab -k -c100 -n50000 -S "http://localhost:$(PORT_FCGI)/$(REQUEST)"
+benchmark-uwsgi: test-uwsgi
 	@echo Benchmarking uWSGI
-	./on-cpu 0 ab -k -c100 -n50000 -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)" 2> >(grep -v " requests")
-restrict-cpu:
-	./restrict-cpu
+	ab -k -c100 -n50000 -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
 
-test: test-resty test-fcgi
+test: test-resty test-fcgi test-uwsgi
 test-resty: nginx
 	@echo Testing resty server
-	curl -f "http://localhost:$(PORT_RESTY)/$(REQUEST)"
+	curl -fsS "http://localhost:$(PORT_RESTY)/$(REQUEST)"
 test-fcgi: nginx fcgi
 	@echo Testing fcgi server
-	curl -f "http://localhost:$(PORT_FCGI)/$(REQUEST)"
+	curl -fsS "http://localhost:$(PORT_FCGI)/$(REQUEST)"
 test-uwsgi: nginx uwsgi
 	@echo Testing uwsgi server
-	curl -f "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
+	curl -fsS "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
 
 nginx: nginx/logs/nginx.pid .reload
 	$(if $(IS_NGINX), , $(RUN_NGINX))
