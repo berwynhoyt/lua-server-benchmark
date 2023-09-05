@@ -4,14 +4,14 @@
 
 Here are instructions to install [OpenResty](https://openresty.org/en/installation.html) and [LuaRocks](https://luarocks.org/#quick-start).
 
-Next install what we need for our specific benchmarks. These instructions work on Ubuntu:
+Next install what we need for our specific benchmarks. These instructions work on Ubuntu (otherwise see troubleshooting note on missing packages below):
 
 ```shell
 apt install apache2-utils  # supplies ab, the apache benchmark tool
 apt install libfcgi-dev    # supplies fcgi_stdio.h
-apt install parallel       # use GNU version of parallel to load uwsgi instead of canonical's version (on Ubuntu)
 sudo luarocks install wsapi-fcgi
-apt install lua5.1 liblua5.1-dev  # required to build uWSGI with lua support
+apt install lua5.1 liblua5.1-dev      # required to build uWSGI with lua support
+apt install luajit libluajit-5.1-dev  # required to build uWSGI with luajit support
 ```
 
 Start your nginx and fcgi servers:
@@ -44,15 +44,34 @@ The benchmark results on a quad-core i7-8565 @1.8GHz are as follows, where 8081 
 
 ```shell
 $ make summary
-ab -k -c1000 -n50000 -S "http://localhost:8081/" 2> >(grep -v " requests")
-Time taken for tests:   0.455 seconds
-ab -k -c1000 -n50000 -S "http://localhost:8082/" 2> >(grep -v " requests")
-Time taken for tests:   3.629 seconds
+Benchmarking openresty LuaJIT
+ab -k -c1000 -n50000 -S "http://localhost:8081/multiply?a=2&b=3"
+Time taken for tests:   0.442 seconds
+ 
+Benchmarking FastCGI Lua 5.4
+ab -k -c100 -n50000 -S "http://localhost:8082/multiply?a=2&b=3"
+Time taken for tests:   2.864 seconds
+ 
+Benchmarking uwsgi/lua5.1
+ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
+Time taken for tests:   2.657 seconds
+ 
+Benchmarking uwsgi/luajit
+ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
+Time taken for tests:   2.635 seconds
 ```
 
-In short, OpenResty's Lua solution is about **8× faster** than PUC Lua via FastCGI.
+In short, OpenResty's Lua solution is about **6.5× faster** than Lua via FastCGI protocol and  **6× faster** than Lua via uWSGI's WSAPI protocol. As you can see, it makes no difference whether we use Lua or LuaJIT in this case – presumably because the Lua program is so small, its speed is swamped by WSAPI protocol overhead.
 
 ## Troubleshooting
+
+### Deprecation warning
+
+Please note that although uWSGI is used as a benchmark comparison point, it is already in maintenance mode and building it already has deprecation warnings for use of old ssl and python distutils functions. Because of this, it requires python < 3.12 and it is not clear what version of libssl-dev will drop support.
+
+### Missing packages
+
+If your OS does have the specified Lua packages, you may need to build them from source. In that case, you will need to change the Makefile to specify locations to them. See [uWSGI notes on using Lua](https://uwsgi-docs.readthedocs.io/en/latest/Lua.html#:~:text=If%20you%20do%20not%20want%20to%20rely%20on%20the%20pkg%2Dconfig%20tool).
 
 ### Too many open files
 
