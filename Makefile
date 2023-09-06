@@ -67,8 +67,11 @@ benchmark-uwsgi: test-uwsgi
 	@echo " "
 
 test: test-resty test-fcgi
+	@echo Testing uWSGI server with Lua5.1
 	@$(MAKE) test-uwsgi-lua5.1  --no-print-directory
+	@echo Testing uWSGI server with Lua5.4
 	@$(MAKE) test-uwsgi-lua5.4  --no-print-directory
+	@echo Testing uWSGI server with LuaJIT
 	@$(MAKE) test-uwsgi-luajit  --no-print-directory
 test-resty: nginx
 	@echo Testing resty server
@@ -85,7 +88,6 @@ test-uwsgi-lua5.4: test-uwsgi
 test-uwsgi-luajit: PLUGIN_DIR=uwsgi/luajit
 test-uwsgi-luajit: test-uwsgi
 test-uwsgi: nginx uwsgi
-	@echo Testing uwsgi server
 	curl -fsS "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
 	@echo
 

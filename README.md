@@ -25,12 +25,15 @@ Test that nginx is working:
 
 ```shell
 $ make test
-curl http://localhost:8081/ && echo Success
-<p>hello, world</p>
-Success
-curl http://localhost:8082/ && echo Success
-<html><body><p>Hello Wsapi!</p><p>PATH_INFO: /</p><p>SCRIPT_NAME: /run.lua</p></body></html>
-Success
+Testing resty server
+curl -fsS "http://localhost:8081/multiply?a=2&b=3"
+<html><body><p>Hello NGINX-Lua!</p><p>PATH=/multiply</p><p>RESULT: 2*3=6</p></body></html>
+
+Testing fcgi server
+curl -fsS "http://localhost:8082/multiply?a=2&b=3"
+<html><body><p>Hello WSAPI!</p><p>PATH=/multiply</p><p>RESULT: 2*3=6</p></body></html>
+
+...
 ```
 
 Run the benchmarks:
@@ -75,7 +78,7 @@ The overheads we're really testing here have to do with the protocol being used 
 
 - **1.0×**: OpenResty - no serialization protocol - fastest by far
 - **6.5×**: FastCGI protocol
-- **6.0×** WSAPI protocol
+- **6.0×**: WSAPI protocol
 
 ## Troubleshooting
 
