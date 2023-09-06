@@ -58,7 +58,7 @@ Time taken for tests:   0.442 seconds
  
 Benchmarking apache mod-lua
 ab -k -c100 -n50000 -S "http://localhost:8080/multiply?a=2&b=3"
-Time taken for tests:   2.219 seconds
+Time taken for tests:   0.902 seconds
  
 Benchmarking FastCGI Lua 5.4
 ab -k -c100 -n50000 -S "http://localhost:8082/multiply?a=2&b=3"
@@ -77,14 +77,14 @@ ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
 Time taken for tests:   2.616 seconds
 ```
 
-In short, OpenResty's Lua solution is our baseline. Apache with PUC Lua takes **5.0× as long**. FastCGI takes **6.5× as long** and uWSGI's WSAPI prototcol takes **6× as long**. Since our Lua program is so small and simple, it makes no difference whether we use Lua 5.1, Lua 5.4 or LuaJIT.
+In short, OpenResty's Lua solution is our baseline. Apache with PUC Lua takes **2× as long**. FastCGI takes **6.5× as long** and uWSGI's WSAPI prototcol takes **6× as long**. Since our Lua program is so small and simple, it makes no difference whether we use Lua 5.1, Lua 5.4 or LuaJIT.
 
 The overheads we're really testing here have to do with the protocol being used to serialize commands sent to Lua:
 
-- **1.0×**: OpenResty - no serialization protocol - fastest by far
-- **5.0×**: Apache – no serialization protocol
+- **1×**: OpenResty - no serialization protocol - fastest by far
+- **2×**: Apache – no serialization protocol
+- **6×**: WSAPI protocol
 - **6.5×**: FastCGI protocol
-- **6.0×**: WSAPI protocol
 
 ## Troubleshooting
 
