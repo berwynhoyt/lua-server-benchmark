@@ -1,5 +1,6 @@
 fcgi.pid
 nginx
+apache/logs
 uwsgi
 .reload
 

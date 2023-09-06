@@ -5,6 +5,7 @@ SHELL := /bin/bash
 REQUEST :=
 REQUEST := multiply?a=2&b=3
 
+PORT_APACHE := 8080
 PORT_RESTY := 8081
 PORT_FCGI := 8082
 PORT_UWSGI := 8083
@@ -12,9 +13,14 @@ PORT_UWSGI := 8083
 export SOCKET_FCGI := /tmp/nginx-fcgi-benchmark.sock
 export SOCKET_UWSGI := /tmp/nginx-uwsgi-benchmark.sock
 
-LUA=$(shell which lua)
 export LUA_PATH := www/?.lua;;
+LUA=$(shell which lua)
 NGINX := $(shell which nginx >/dev/null && echo nginx || echo /usr/local/openresty/nginx/sbin/nginx)
+APACHE := apache2
+
+RUN_APACHE := $(APACHE) -f "$(shell pwd)/apache/httpd.conf"
+STOP_APACHE := $(RUN_APACHE) -k stop
+
 RUN_NGINX := $(NGINX) -p nginx -c conf/nginx.conf
 STOP_NGINX := $(RUN_NGINX) -s quit
 
@@ -26,24 +32,25 @@ PLUGIN_DIR = uwsgi/lua5.1
 RUN_UWSGI = (uwsgi/uwsgi --plugin-dir $(PLUGIN_DIR) --ini uwsgi.ini &) && sleep 0.1
 STOP_UWSGI := killall uwsgi
 
+IS_APACHE = $(shell lsof -i TCP:$(PORT_APACHE) &>/dev/null && echo yes)
 IS_NGINX = $(shell lsof -i TCP:$(PORT_RESTY) &>/dev/null && echo yes)
 IS_FCGI = $(shell lsof -a -U -- $(SOCKET_FCGI) &>/dev/null && echo yes)
 IS_UWSGI = $(shell lsof -a -U -- $(SOCKET_UWSGI) &>/dev/null && echo yes)
 
 UWSGI_SOURCE := https://github.com/unbit/uwsgi.git
 
-$(shell mkdir -p nginx/logs)
+$(shell mkdir -p nginx/logs apache/logs)
 
 all: summary
 start: nginx fcgi
-stop: fcgi-stop nginx-stop uwsgi-stop
+stop: fcgi-stop uwsgi-stop nginx-stop apache-stop
 reload:
 	@touch nginx/conf/nginx.conf
 	@$(MAKE) .reload  --no-print-directory
 
 summary:
 	@$(MAKE) benchmark 1> >(egrep "^ab|Time taken|Benchmarking [^l]|^[ ]$$") 2> >(grep -v " requests")
-benchmarks benchmark: benchmark-resty benchmark-fcgi
+benchmarks benchmark: benchmark-resty benchmark-apache benchmark-fcgi
 	@$(MAKE) benchmark-uwsgi-lua5.1  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-lua5.4  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-luajit  --no-print-directory
@@ -51,9 +58,13 @@ benchmark-resty: test-resty
 	@echo "Benchmarking openresty LuaJIT"
 	ab -k -c1000 -n50000 -S "http://localhost:$(PORT_RESTY)/$(REQUEST)"
 	@echo " "
+benchmark-apache: test-apache
+	@echo "Benchmarking apache mod-lua"
+	ab -k -c100 -n50000 -S "http://localhost:$(PORT_APACHE)/$(REQUEST)"
+	@echo " "
 benchmark-fcgi: test-fcgi
 	@echo "Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')"
-	ab -k -c100 -n50000 -S "http://localhost:$(PORT_FCGI)/$(REQUEST)"
+	ab -k -c10 -n50000 -S "http://localhost:$(PORT_FCGI)/$(REQUEST)"
 	@echo " "
 benchmark-uwsgi-lua5.1: PLUGIN_DIR=uwsgi/lua5.1
 benchmark-uwsgi-lua5.1: benchmark-uwsgi
@@ -66,7 +77,7 @@ benchmark-uwsgi: test-uwsgi
 	ab -k -c100 -n50000 -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
 	@echo " "
 
-test: test-resty test-fcgi
+test: test-resty test-apache test-fcgi
 	@echo Testing uWSGI server with Lua5.1
 	@$(MAKE) test-uwsgi-lua5.1  --no-print-directory
 	@echo Testing uWSGI server with Lua5.4
@@ -76,6 +87,10 @@ test: test-resty test-fcgi
 test-resty: nginx
 	@echo Testing resty server
 	curl -fsS "http://localhost:$(PORT_RESTY)/$(REQUEST)"
+	@echo
+test-apache: apache
+	@echo Testing apache server
+	curl -fsS "http://localhost:$(PORT_APACHE)/$(REQUEST)"
 	@echo
 test-fcgi: nginx fcgi
 	@echo Testing fcgi server
@@ -95,15 +110,23 @@ nginx: nginx/logs/nginx.pid .reload
 	$(if $(IS_NGINX), , $(RUN_NGINX))
 nginx/logs/nginx.pid:
 	$(RUN_NGINX)
-.reload: nginx/conf/nginx.conf Makefile www/app.lua www/uwsgi-app.lua
+.reload: nginx/conf/nginx.conf apache/httpd.conf Makefile www/app.lua www/uwsgi-app.lua
 	@echo Reloading server config
 	@touch .reload
 	$(if $(IS_NGINX), $(RUN_NGINX) -s reload && sleep 0.1, $(RUN_NGINX))
+	$(if $(IS_APACHE), $(RUN_APACHE) -k restart && sleep 0.1, $(RUN_APACHE))
 	$(if $(IS_FCGI), $(STOP_FCGI))
 	$(RUN_FCGI)
 	@echo
 nginx-stop:
 	$(if $(IS_NGINX), $(STOP_NGINX))
+
+apache: apache/logs/apache.pid .reload
+	$(if $(IS_APACHE), , $(RUN_APACHE))
+apache/logs/apache.pid:
+	$(RUN_APACHE)
+apache-stop:
+	$(if $(IS_APACHE), $(STOP_APACHE))
 
 fcgi: .reload
 	$(if $(IS_FCGI), , $(RUN_FCGI))
