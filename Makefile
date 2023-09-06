@@ -5,9 +5,10 @@ SHELL := /bin/bash
 REQUEST :=
 REQUEST := multiply?a=2&b=3
 
-export PORT_RESTY := 8081
-export PORT_FCGI := 8082
-export PORT_UWSGI := 8083
+PORT_RESTY := 8081
+PORT_FCGI := 8082
+PORT_UWSGI := 8083
+
 export SOCKET_FCGI := /tmp/nginx-fcgi-benchmark.sock
 export SOCKET_UWSGI := /tmp/nginx-uwsgi-benchmark.sock
 
@@ -44,6 +45,7 @@ summary:
 	@$(MAKE) benchmark 1> >(egrep "^ab|Time taken|Benchmarking [^l]|^[ ]$$") 2> >(grep -v " requests")
 benchmarks benchmark: benchmark-resty benchmark-fcgi
 	@$(MAKE) benchmark-uwsgi-lua5.1  --no-print-directory
+	@$(MAKE) benchmark-uwsgi-lua5.4  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-luajit  --no-print-directory
 benchmark-resty: test-resty
 	@echo "Benchmarking openresty LuaJIT"
@@ -55,6 +57,8 @@ benchmark-fcgi: test-fcgi
 	@echo " "
 benchmark-uwsgi-lua5.1: PLUGIN_DIR=uwsgi/lua5.1
 benchmark-uwsgi-lua5.1: benchmark-uwsgi
+benchmark-uwsgi-lua5.4: PLUGIN_DIR=uwsgi/lua5.4
+benchmark-uwsgi-lua5.4: benchmark-uwsgi
 benchmark-uwsgi-luajit: PLUGIN_DIR=uwsgi/luajit
 benchmark-uwsgi-luajit: benchmark-uwsgi
 benchmark-uwsgi: test-uwsgi
@@ -64,6 +68,7 @@ benchmark-uwsgi: test-uwsgi
 
 test: test-resty test-fcgi
 	@$(MAKE) test-uwsgi-lua5.1  --no-print-directory
+	@$(MAKE) test-uwsgi-lua5.4  --no-print-directory
 	@$(MAKE) test-uwsgi-luajit  --no-print-directory
 test-resty: nginx
 	@echo Testing resty server
@@ -75,6 +80,8 @@ test-fcgi: nginx fcgi
 	@echo
 test-uwsgi-lua5.1: PLUGIN_DIR=uwsgi/lua5.1
 test-uwsgi-lua5.1: test-uwsgi
+test-uwsgi-lua5.4: PLUGIN_DIR=uwsgi/lua5.4
+test-uwsgi-lua5.4: test-uwsgi
 test-uwsgi-luajit: PLUGIN_DIR=uwsgi/luajit
 test-uwsgi-luajit: test-uwsgi
 test-uwsgi: nginx uwsgi
@@ -86,7 +93,7 @@ nginx: nginx/logs/nginx.pid .reload
 	$(if $(IS_NGINX), , $(RUN_NGINX))
 nginx/logs/nginx.pid:
 	$(RUN_NGINX)
-.reload: nginx/conf/nginx.conf Makefile www/fcgi-app.lua www/uwsgi-app.lua
+.reload: nginx/conf/nginx.conf Makefile www/app.lua www/uwsgi-app.lua
 	@echo Reloading server config
 	@touch .reload
 	$(if $(IS_NGINX), $(RUN_NGINX) -s reload && sleep 0.1, $(RUN_NGINX))
@@ -106,13 +113,17 @@ uwsgi: build-uwsgi uwsgi-stop
 	$(RUN_UWSGI)
 uwsgi-stop:
 	$(if $(IS_UWSGI), $(STOP_UWSGI))
-build-uwsgi: uwsgi/uwsgi uwsgi/lua5.1/lua_plugin.so uwsgi/luajit/lua_plugin.so
+build-uwsgi: uwsgi/uwsgi uwsgi/lua5.1/lua_plugin.so uwsgi/lua5.4/lua_plugin.so uwsgi/luajit/lua_plugin.so
 uwsgi/uwsgi: uwsgi/Makefile
 	$(MAKE) -C uwsgi all PROFILE=core --no-print-directory
 uwsgi/lua5.1/lua_plugin.so: uwsgi/Makefile
 	$(MAKE) -C uwsgi plugin.lua PROFILE=core UWSGICONFIG_LUAPC=lua5.1 plugin.lua --no-print-directory
 	mkdir -p uwsgi/lua5.1
 	mv uwsgi/lua_plugin.so uwsgi/lua5.1
+uwsgi/lua5.4/lua_plugin.so: uwsgi/Makefile
+	$(MAKE) -C uwsgi plugin.lua PROFILE=core UWSGICONFIG_LUAPC=lua5.4 plugin.lua --no-print-directory
+	mkdir -p uwsgi/lua5.4
+	mv uwsgi/lua_plugin.so uwsgi/lua5.4
 uwsgi/luajit/lua_plugin.so: uwsgi/Makefile
 	$(MAKE) -C uwsgi plugin.lua PROFILE=core UWSGICONFIG_LUAPC=luajit  --no-print-directory
 	mkdir -p uwsgi/luajit

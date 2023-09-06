@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
 
 local fastcgi = require 'wsapi.fastcgi'
-local app = require 'fcgi-app'
+local app = require 'app'
 fastcgi.run(app.run)

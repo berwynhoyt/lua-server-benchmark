@@ -1,2 +1,2 @@
-require('fcgi-app')
-return run
+local app = require('app')
+return app.run

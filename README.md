@@ -10,7 +10,8 @@ Next install what we need for our specific benchmarks. These instructions work o
 apt install apache2-utils  # supplies ab, the apache benchmark tool
 apt install libfcgi-dev    # supplies fcgi_stdio.h
 sudo luarocks install wsapi-fcgi
-apt install lua5.1 liblua5.1-dev      # required to build uWSGI with lua support
+apt install lua5.1 liblua5.1-dev      # required to build uWSGI with lua5.1 support
+apt install lua5.4 liblua5.4-dev      # required to build uWSGI with lua5.4 support
 apt install luajit libluajit-5.1-dev  # required to build uWSGI with luajit support
 ```
 
@@ -35,8 +36,11 @@ Success
 Run the benchmarks:
 
 ```shell
-make benchmarks
+make summary  # or try make benchmarks for more info
+make stop  # when you're done testing, stop the servers make started
 ```
+
+Peruse the `Makefile` for other useful make targets if you want to test specific things.
 
 ## Results
 
@@ -50,18 +54,28 @@ Time taken for tests:   0.442 seconds
  
 Benchmarking FastCGI Lua 5.4
 ab -k -c100 -n50000 -S "http://localhost:8082/multiply?a=2&b=3"
-Time taken for tests:   2.864 seconds
+Time taken for tests:   2.860 seconds
  
 Benchmarking uwsgi/lua5.1
 ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
-Time taken for tests:   2.657 seconds
+Time taken for tests:   2.693 seconds
+ 
+Benchmarking uwsgi/lua5.4
+ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
+Time taken for tests:   2.609 seconds
  
 Benchmarking uwsgi/luajit
 ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
-Time taken for tests:   2.635 seconds
+Time taken for tests:   2.616 seconds
 ```
 
-In short, OpenResty's Lua solution is about **6.5× faster** than Lua via FastCGI protocol and  **6× faster** than Lua via uWSGI's WSAPI protocol. As you can see, it makes no difference whether we use Lua or LuaJIT in this case – presumably because the Lua program is so small, its speed is swamped by WSAPI protocol overhead.
+In short, OpenResty's Lua solution is our baseline. FastCGI takes **6.5× as long** and uWSGI's WSAPI prototcol takes **6× as long**. Since our Lua program is so small and simple, it makes no difference whether we use Lua 5.1, Lua 5.4 or LuaJIT.
+
+The overheads we're really testing here have to do with the protocol being used to serialize commands sent to Lua:
+
+- **1.0×**: OpenResty - no serialization protocol - fastest by far
+- **6.5×**: FastCGI protocol
+- **6.0×** WSAPI protocol
 
 ## Troubleshooting
 
