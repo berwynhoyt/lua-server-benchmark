@@ -54,27 +54,27 @@ The benchmark results on a quad-core i7-8565 @1.8GHz are as follows, where 8081 
 $ make summary
 Benchmarking openresty LuaJIT
 ab -k -c1000 -n50000 -S "http://localhost:8081/multiply?a=2&b=3"
-Time taken for tests:   0.442 seconds
+Time taken for tests:   0.415 seconds
  
 Benchmarking apache mod-lua
-ab -k -c100 -n50000 -S "http://localhost:8080/multiply?a=2&b=3"
-Time taken for tests:   0.902 seconds
+ab -k -c10 -n50000 -S "http://localhost:8080/multiply?a=2&b=3"
+Time taken for tests:   0.966 seconds
  
 Benchmarking FastCGI Lua 5.4
-ab -k -c100 -n50000 -S "http://localhost:8082/multiply?a=2&b=3"
-Time taken for tests:   2.860 seconds
+ab -k -c10 -n50000 -S "http://localhost:8082/multiply?a=2&b=3"
+Time taken for tests:   2.720 seconds
  
 Benchmarking uwsgi/lua5.1
 ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
-Time taken for tests:   2.693 seconds
+Time taken for tests:   2.536 seconds
  
 Benchmarking uwsgi/lua5.4
 ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
-Time taken for tests:   2.609 seconds
+Time taken for tests:   2.506 seconds
  
 Benchmarking uwsgi/luajit
 ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
-Time taken for tests:   2.616 seconds
+Time taken for tests:   2.573 seconds
 ```
 
 In short, OpenResty's Lua solution is our baseline. Apache with PUC Lua takes **2× as long**. FastCGI takes **6.5× as long** and uWSGI's WSAPI prototcol takes **6× as long**. Since our Lua program is so small and simple, it makes no difference whether we use Lua 5.1, Lua 5.4 or LuaJIT.
@@ -85,6 +85,8 @@ The overheads we're really testing here have to do with the protocol being used 
 - **2×**: Apache – no serialization protocol
 - **6×**: WSAPI protocol
 - **6.5×**: FastCGI protocol
+
+**Note:** It's possible that there is a way to double the speed of my FastCGI and WSAPI benchmarks, because my CPU load is only about 50% of each core (using htop) when I run those tests, whereas OpenResty and Apache tests use 100% of every core. I don't know why NGINX doesn't parallel those up sufficiently to use 100% CPU. There may be a better server config, but I've tried various ones and I can't find it.
 
 ## Troubleshooting
 
