@@ -1,5 +1,7 @@
 # Makefile to test performance of Lua in OpenResty vs NGINX+WSAPI+Lua5.4
 
+loops := 50000
+
 SHELL := /bin/bash
 
 REQUEST :=
@@ -56,15 +58,15 @@ benchmarks benchmark: benchmark-resty benchmark-apache benchmark-fcgi
 	@$(MAKE) benchmark-uwsgi-luajit  --no-print-directory
 benchmark-resty: test-resty
 	@echo "Benchmarking openresty LuaJIT"
-	ab -k -c1000 -n50000 -S "http://localhost:$(PORT_RESTY)/$(REQUEST)"
+	ab -k -c1000 -n$(loops) -S "http://localhost:$(PORT_RESTY)/$(REQUEST)"
 	@echo " "
 benchmark-apache: test-apache
 	@echo "Benchmarking apache mod-lua"
-	ab -k -c100 -n50000 -S "http://localhost:$(PORT_APACHE)/$(REQUEST)"
+	ab -k -c10 -n$(loops) -S "http://localhost:$(PORT_APACHE)/$(REQUEST)"
 	@echo " "
 benchmark-fcgi: test-fcgi
 	@echo "Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')"
-	ab -k -c10 -n50000 -S "http://localhost:$(PORT_FCGI)/$(REQUEST)"
+	ab -k -c10 -n$(loops) -S "http://localhost:$(PORT_FCGI)/$(REQUEST)"
 	@echo " "
 benchmark-uwsgi-lua5.1: PLUGIN_DIR=uwsgi/lua5.1
 benchmark-uwsgi-lua5.1: benchmark-uwsgi
@@ -74,7 +76,7 @@ benchmark-uwsgi-luajit: PLUGIN_DIR=uwsgi/luajit
 benchmark-uwsgi-luajit: benchmark-uwsgi
 benchmark-uwsgi: test-uwsgi
 	@echo "Benchmarking $(PLUGIN_DIR)"
-	ab -k -c100 -n50000 -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
+	ab -k -c100 -n$(loops) -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
 	@echo " "
 
 test: test-resty test-apache test-fcgi
