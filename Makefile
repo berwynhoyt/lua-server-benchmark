@@ -226,7 +226,7 @@ define \n
 
 
 endef
-is_nginx:=$(IS_NGINX)
+
 vars:
 	$(info $(foreach v,$(.VARIABLES),$(if $(filter file, $(origin $(v)) ), $(\n)$(v)=$(value $(v))) ))
 
