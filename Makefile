@@ -51,7 +51,7 @@ reload:
 	@$(MAKE) .reload  --no-print-directory
 
 summary:
-	@$(MAKE) benchmark 1> >(egrep "^ab|Time taken|Benchmarking [^l]|^[ ]$$") 2> >(grep -v " requests")
+	@$(MAKE) benchmark 2> >(grep -v " requests") 1> >(egrep "^ab|Time taken|Benchmarking [^l]|^[ ]$$")
 benchmarks benchmark: benchmark-resty benchmark-apache benchmark-fcgi
 	@$(MAKE) benchmark-uwsgi-lua5.1  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-lua5.4  --no-print-directory
