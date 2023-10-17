@@ -1,6 +1,9 @@
 fcgi.pid
-nginx
+nginx/logs
+nginx/modules
 apache/logs
+nginx-lws
+nginx-source
 uwsgi
 .reload
 

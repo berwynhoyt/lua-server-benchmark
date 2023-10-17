@@ -2,7 +2,17 @@
 
 ## Installation
 
-Here are instructions to install [OpenResty](https://openresty.org/en/installation.html) and [LuaRocks](https://luarocks.org/#quick-start).
+* Install Lua 5.1 and 5.4 (for Lua version comparison).
+* Perform these instructions to install [LuaRocks](https://luarocks.org/#quick-start) (so that you can get wsapi-fcgi below).
+* Install  [OpenResty](https://openresty.org/en/installation.html) and also [standard NGINX](https://docs.nginx.com/nginx/admin-guide/installing-nginx/installing-nginx-open-source/)
+  * This will install NGINX twice: one invoked as `openresty` and the other invoked with `nginx`.
+  * Most of the benchmarks are performed with openresty, but standard nginx is also necessary to benchmark `nginx-lws`, which doesn't work with OpenResty out of the box.
+
+* Fetch and build `nginx-lws` against the Nginx source using:
+
+```shell
+make fetch build
+```
 
 Next install what we need for our specific benchmarks. These instructions work on Ubuntu (otherwise see troubleshooting note on missing packages below):
 
@@ -48,13 +58,19 @@ Peruse the `Makefile` for other useful make targets if you want to test specific
 
 ## Results
 
+![50,000 Requests](https://docs.google.com/spreadsheets/d/e/2PACX-1vRk18zYXH0Yvx6KKWqO0Ypkedfg06G99nfV5l8uMVQc8s_hxS1N84vXetsiQE9S6teU3PoIYwPjVRHU/pubchart?oid=795106361&format=image)
+
 The benchmark results on a quad-core i7-8565 @1.8GHz are as follows, where 8081 is port serving OpenResty's Lua and 8082 is PUC Lua via FastCGI:
 
 ```shell
 $ make summary
 Benchmarking openresty LuaJIT
 ab -k -c1000 -n50000 -S "http://localhost:8081/multiply?a=2&b=3"
-Time taken for tests:   0.415 seconds
+Time taken for tests:   0.400 seconds
+ 
+Benchmarking nginx-lws (Lua Web Services)
+ab -k -c25 -n50000 -S "http://localhost:8084/multiply?a=2&b=3"
+Time taken for tests:   0.447 seconds
  
 Benchmarking apache mod-lua
 ab -k -c10 -n50000 -S "http://localhost:8080/multiply?a=2&b=3"
@@ -77,16 +93,21 @@ ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
 Time taken for tests:   2.573 seconds
 ```
 
-In short, OpenResty's Lua solution is our baseline. Apache with PUC Lua takes **2× as long**. FastCGI takes **6.5× as long** and uWSGI's WSAPI prototcol takes **6× as long**. Since our Lua program is so small and simple, it makes no difference whether we use Lua 5.1, Lua 5.4 or LuaJIT.
+In short, OpenResty's Lua solution is our baseline, followed closely by LWS. Apache with PUC Lua takes **2× as long**. FastCGI takes **6.5× as long** and uWSGI's WSAPI prototcol takes **6× as long**. Since our Lua program is so small and simple, it makes no difference whether we use Lua 5.1, Lua 5.4 or LuaJIT.
 
 The overheads we're really testing here have to do with the protocol being used to serialize commands sent to Lua:
 
-- **1×**: OpenResty - no serialization protocol - fastest by far
+- **1×**: OpenResty - no serialization protocol - fastest
+- **1×**: LWS - no serialization protocol - runner up
 - **2×**: Apache – no serialization protocol
-- **6×**: WSAPI protocol
-- **6.5×**: FastCGI protocol
+- **6×**: uWSGI - with WSAPI protocol
+- **7×**: FastCGI protocol
 
-**Note:** It's possible that there is a way to double the speed of my FastCGI and WSAPI benchmarks, because my CPU load is only about 50% of each core (using htop) when I run those tests, whereas OpenResty and Apache tests use 100% of every core. I don't know why NGINX doesn't parallel those up sufficiently to use 100% CPU. There may be a better server config, but I've tried various ones and I can't find it.
+**Notes:**
+
+1. I have tuned each benchmark to issue the number of **concurrent requests** that is optimal for that specific toolchain (around 25). This is unrealistic since it runs each toolchain at its sweet spot.
+2. The two fastest solutions can handle **1000 concurrent requests** without any failures. Apache can only 30, and the others 100.
+3. It's possible that there is a way to double the speed of my FastCGI and WSAPI benchmarks, because my CPU load is only about 50% of each core (using htop) when I run those tests, whereas OpenResty and Apache tests use 100% of every core. I don't know why NGINX doesn't parallel those up sufficiently to use 100% CPU. There may be a better server config, but I've tried various ones and I can't find it.
 
 ## Troubleshooting
 
