@@ -106,7 +106,7 @@ The overheads we're really testing here have to do with the protocol being used 
 **Notes:**
 
 1. I have tuned each benchmark to issue the number of **concurrent requests** that is optimal for that specific toolchain (around 25). This is unrealistic since it runs each toolchain at its sweet spot.
-2. The two fastest solutions can handle **1000 concurrent requests** without any failures. Apache can only 30, and the others 100.
+2. The two fastest solutions can handle **1000 concurrent requests** without any failures. Apache can only handle 30, and the others only 100.
 3. It's possible that there is a way to double the speed of my FastCGI and WSAPI benchmarks, because my CPU load is only about 50% of each core (using htop) when I run those tests, whereas OpenResty and Apache tests use 100% of every core. I don't know why NGINX doesn't parallel those up sufficiently to use 100% CPU. There may be a better server config, but I've tried various ones and I can't find it.
 
 ## Troubleshooting
