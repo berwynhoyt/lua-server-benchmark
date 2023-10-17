@@ -190,9 +190,6 @@ uwsgi/Makefile:
 NGINX_VERSION := $(shell $(NGINX) -v 2>&1 | sed -E 's|.*version: ([/a-zA-Z]+)/([0-9.]+).*|\1-\2|')
 NGINX_NAME    := $(shell $(NGINX) -v 2>&1 | sed -E 's|.*version: ([/a-zA-Z]+)/([0-9.]+).*|\1|')
 #DEBUG_LOGGING := --with-debug
-install: install-nginx-lws
-install-nginx-lws: build
-	cp nginx-source/objs/lws_module.so /usr/lib/nginx/modules
 fetch: nginx-lws/config nginx-source/configure
 build: build-nginx-lws
 build-nginx-lws: nginx-source/objs/lws_module.so
@@ -242,4 +239,4 @@ vars:
 .PHONY: nginx nginx-stop resty resty-stop
 .PHONY: fcgi fcgi-stop
 .PHONY: uwsgi uwsgi-stop build-uwsgi
-.PHONY: install build install-nginx-lws build-nginx-lws fetch
+.PHONY: build build-nginx-lws fetch
