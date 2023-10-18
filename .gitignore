@@ -5,6 +5,7 @@ apache/logs
 nginx-lws
 nginx-source
 uwsgi
+redbean.com
 .reload
 
 myps
