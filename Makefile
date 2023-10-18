@@ -70,30 +70,30 @@ fetch: nginx-lws/config nginx-source/configure redbean.com
 build: build-nginx-lws
 
 summary:
-	@$(MAKE) benchmark 2> >(grep -v " requests") 1> >(egrep "^ab|Time taken|Benchmarking [^l]|^[ ]$$")
-benchmarks benchmark: benchmark-resty benchmark-lws benchmark-apache benchmark-fcgi
+	@$(MAKE) benchmark | egrep "^ab|Time taken|Benchmarking [^l]|^[ ]$$"
+benchmarks benchmark: benchmark-resty benchmark-lws benchmark-apache benchmark-fcgi benchmark-redbean
 	@$(MAKE) benchmark-uwsgi-lua5.1  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-lua5.4  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-luajit  --no-print-directory
 benchmark-resty: test-resty
 	@echo "Benchmarking openresty LuaJIT"
-	ab -k -c25 -n$(loops) -S "http://localhost:$(PORT_RESTY)/$(REQUEST)"
+	ab -kq -c25 -n$(loops) -S "http://localhost:$(PORT_RESTY)/$(REQUEST)"
 	@echo " "
 benchmark-lws: test-lws
 	@echo "Benchmarking nginx-lws (Lua Web Services)"
-	ab -k -c25 -n$(loops) -S "http://localhost:$(PORT_LWS)/$(REQUEST)"
+	ab -kq -c25 -n$(loops) -S "http://localhost:$(PORT_LWS)/$(REQUEST)"
 	@echo " "
 benchmark-apache: test-apache
 	@echo "Benchmarking apache mod-lua"
-	ab -k -c30 -n$(loops) -S "http://localhost:$(PORT_APACHE)/$(REQUEST)"
+	ab -kq -c30 -n$(loops) -S "http://localhost:$(PORT_APACHE)/$(REQUEST)"
 	@echo " "
 benchmark-fcgi: test-fcgi
 	@echo "Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')"
-	ab -k -c10 -n$(loops) -S "http://localhost:$(PORT_FCGI)/$(REQUEST)"
+	ab -kq -c10 -n$(loops) -S "http://localhost:$(PORT_FCGI)/$(REQUEST)"
 	@echo " "
 benchmark-redbean: test-redbean
 	@echo "Benchmarking Redbean $(shell ./redbean.com -e 'print(_VERSION) os.exit()')"
-	ab -k -c10 -n$(loops) -S "http://localhost:$(PORT_REDBEAN)/$(REQUEST)"
+	ab -kq -c10 -n$(loops) -S "http://localhost:$(PORT_REDBEAN)/$(REQUEST)"
 	@echo " "
 benchmark-uwsgi-lua5.1: UWSGI_PLUGIN_DIR=uwsgi/lua5.1
 benchmark-uwsgi-lua5.1: benchmark-uwsgi
@@ -103,7 +103,7 @@ benchmark-uwsgi-luajit:  UWSGI_PLUGIN_DIR=uwsgi/luajit
 benchmark-uwsgi-luajit:  benchmark-uwsgi
 benchmark-uwsgi: test-uwsgi
 	@echo "Benchmarking $(UWSGI_PLUGIN_DIR)"
-	ab -k -c100 -n$(loops) -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
+	ab -kq -c100 -n$(loops) -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
 	@echo " "
 
 test: test-resty test-apache test-fcgi

@@ -3,7 +3,7 @@ M = {}
 function handle(r)
     r.content_type = "text/plain"
     r:puts("<html><body>" ..
-        "<p>Hello Apache-" .. _VERSION .. "!</p>" ..
+        "<p>Hello  Apache-" .. _VERSION .. "!</p>" ..
         "<p>PATH=" .. r.uri .. "</p>")
     if r.uri=='/multiply' then
         local args = r:parseargs()
