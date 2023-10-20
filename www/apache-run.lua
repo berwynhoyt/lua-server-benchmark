@@ -7,7 +7,7 @@ function handle(r)
         "<p>PATH=" .. r.uri .. "</p>")
     if r.uri=='/multiply' then
         local args = r:parseargs()
-        r:puts("<p>RESULT: " .. args.a .."*" .. args.b .. "=" .. args.a*args.b .. "</p>")
+        r:puts("<p>RESULT: " .. args.a .."*" .. args.b .. "=" .. math.floor(args.a*args.b) .. "</p>")
     end
     r:puts("</body></html>\n")
     return 0
