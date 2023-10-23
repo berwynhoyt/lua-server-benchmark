@@ -7,6 +7,12 @@ nginx-source
 uwsgi
 redbean.com
 .reload
+weighttp
+httpress
+libparserutils
+wrk2
+cosmopolitan
+buildsystem
 
 myps
 on-cpu

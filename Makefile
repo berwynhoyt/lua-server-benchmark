@@ -95,7 +95,7 @@ reload:
 	@# Force .reload target to run
 	@touch nginx/conf/resty.conf
 	$(MAKE) .reload  --no-print-directory
-build: build-nginx-lws resty nginx apache fcgi redbean uwsgi
+build: build-nginx-lws resty nginx apache fcgi redbean uwsgi $(BENCHMARKER)
 
 summary: build
 	@# The sed filter below converts weighttp output to decimal seconds, zero-padding and converting ms to decimal
@@ -265,8 +265,9 @@ nginx-lws/config:
 	git clone $(LWS_SOURCE) nginx-lws
 
 
-wrk2: wrk2/Makefile
-	$(MAKE) -c wrk2
+wrk2: wrk2/wrk
+wrk2/wrk: wrk2/Makefile
+	$(MAKE) -C wrk2
 wrk2/Makefile:
 	git clone $(WRK2_SOURCE) wrk2
 
@@ -325,7 +326,7 @@ clean:
 	rm -rf nginx-source/Makefile nginx-source/objs nginx/modules/lws_module.so
 	rm -f redbean.com
 	rm -rf weighttp
-	rm -rf hp httpress libparserutils wrk2
+	rm -rf hp httpress libparserutils wrk2 cosmopolitan buildsystem
 	$(MAKE) -C uwsgi clean  --no-print-directory
 
 # Define a newline macro -- only way to use use \n in info output. Note: needs two newlines after 'define' line
