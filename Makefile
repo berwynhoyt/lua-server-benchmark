@@ -325,8 +325,7 @@ clean:
 	rm -f nginx-*.tar.gz
 	rm -rf nginx-source/Makefile nginx-source/objs nginx/modules/lws_module.so
 	rm -f redbean.com
-	rm -rf weighttp
-	rm -rf hp httpress libparserutils wrk2 cosmopolitan buildsystem
+	rm -rf weighttp httpress libparserutils wrk2 cosmopolitan buildsystem
 	$(MAKE) -C uwsgi clean  --no-print-directory
 
 # Define a newline macro -- only way to use use \n in info output. Note: needs two newlines after 'define' line
