@@ -56,6 +56,14 @@ make stop  # when you're done testing, stop the servers make started
 
 Peruse the `Makefile` for other useful make targets if you want to test specific things.
 
+If you want to experiment with different benchmark tools, I have left builders in the Makefile for `weighttp` and `httpress` which produce almost identical results. But you'll need:
+
+```shell
+apt install libev-dev libhttp-parser-dev libuchardet-dev gnutls-dev
+```
+
+
+
 ## Results
 
 ![50,000 Requests](https://docs.google.com/spreadsheets/d/e/2PACX-1vRk18zYXH0Yvx6KKWqO0Ypkedfg06G99nfV5l8uMVQc8s_hxS1N84vXetsiQE9S6teU3PoIYwPjVRHU/pubchart?oid=795106361&format=image)
@@ -63,51 +71,46 @@ Peruse the `Makefile` for other useful make targets if you want to test specific
 The benchmark results on a quad-core i7-8565 @1.8GHz are as follows, where 8081 is port serving OpenResty's Lua and 8082 is PUC Lua via FastCGI:
 
 ```shell
-$ make summary
+$ make
+Benchmarking Redbean Lua 5.4
+50000 requests in 0.293019s
+ 
 Benchmarking openresty LuaJIT
-ab -k -c1000 -n50000 -S "http://localhost:8081/multiply?a=2&b=3"
-Time taken for tests:   0.400 seconds
+50000 requests in 0.448414s
  
 Benchmarking nginx-lws (Lua Web Services)
-ab -k -c25 -n50000 -S "http://localhost:8084/multiply?a=2&b=3"
-Time taken for tests:   0.447 seconds
+50000 requests in 0.549581s
  
 Benchmarking apache mod-lua
-ab -k -c10 -n50000 -S "http://localhost:8080/multiply?a=2&b=3"
-Time taken for tests:   0.966 seconds
+50000 requests in 0.968202s
  
 Benchmarking FastCGI Lua 5.4
-ab -k -c10 -n50000 -S "http://localhost:8082/multiply?a=2&b=3"
-Time taken for tests:   2.720 seconds
+50000 requests in 2.590274s
  
 Benchmarking uwsgi/lua5.1
-ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
-Time taken for tests:   2.536 seconds
+50000 requests in 1.619517s
  
 Benchmarking uwsgi/lua5.4
-ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
-Time taken for tests:   2.506 seconds
+50000 requests in 1.697836s
  
 Benchmarking uwsgi/luajit
-ab -k -c100 -n50000 -S "http://localhost:8083/multiply?a=2&b=3"
-Time taken for tests:   2.573 seconds
+50000 requests in 1.624713s
 ```
 
-In short, OpenResty's Lua solution is our baseline, followed closely by LWS. Apache with PUC Lua takes **2× as long**. FastCGI takes **6.5× as long** and uWSGI's WSAPI prototcol takes **6× as long**. Since our Lua program is so small and simple, it makes no difference whether we use Lua 5.1, Lua 5.4 or LuaJIT.
+In short, LWS is as good as OpenResty for raw speed of requests. Since our Lua program is so small and simple, it makes no difference whether we use Lua 5.1, Lua 5.4 or LuaJIT:
 
-The overheads we're really testing here have to do with the protocol being used to serialize commands sent to Lua:
-
-- **1×**: OpenResty - no serialization protocol - fastest
-- **1×**: LWS - no serialization protocol - runner up
-- **2×**: Apache – no serialization protocol
-- **6×**: uWSGI - with WSAPI protocol
-- **7×**: FastCGI protocol
+- **0.7×**: Redbean - impressive Lua server, but less generic (e.g. doesn't support Python apps)
+- **1×**: OpenResty - fastest general purpose server
+- **1×**: NGINX-LWS - close runner up
+- **2×**: Apache
+- **4×**: uWSGI - with WSAPI protocol
+- **6×**: FastCGI protocol
 
 **Notes:**
 
-1. I have tuned each benchmark to issue the number of **concurrent requests** that is optimal for that specific toolchain (around 25). This is unrealistic since it runs each toolchain at its sweet spot.
-2. The two fastest solutions can handle **1000 concurrent requests** without any failures. Apache can only handle 30, and the others only 100.
-3. It's possible that there is a way to double the speed of my FastCGI and WSAPI benchmarks, because my CPU load is only about 50% of each core (using htop) when I run those tests, whereas OpenResty and Apache tests use 100% of every core. I don't know why NGINX doesn't parallel those up sufficiently to use 100% CPU. There may be a better server config, but I've tried various ones and I can't find it.
+1. The uWSGI and FASTCGI options are slow because they use a protocol to serialize commands sent to Lua.
+2. It's possible that there is a way to double the speed of my FastCGI and WSAPI benchmarks, because those benchmarks only use about half of each CPU core (according to htop), whereas the other benchmarks use almost 100% of every core. I don't know why NGINX doesn't parallel those up sufficiently to use 100% CPU. There may be a better server config, but I've tried various ones and I can't find it.
+3. Not many benchmark tools are fast enough to produce good results. I have found only 3 that are fastest and produce very similar results: `wrk2`, `weighttp`, `httpress`.
 
 ## Troubleshooting
 

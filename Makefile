@@ -10,12 +10,12 @@ LWS_LUA_VERSION := 5.4
 REQUEST :=
 REQUEST := multiply?a=2&b=3
 
-PORT_APACHE := 8080
-PORT_RESTY := 8081
-PORT_FCGI := 8082
-PORT_UWSGI := 8083
-PORT_LWS := 8084
-PORT_REDBEAN := 8085
+PORT_apache := 8080
+PORT_resty := 8081
+PORT_fcgi := 8082
+PORT_uwsgi := 8083
+PORT_lws := 8084
+PORT_redbean := 8085
 
 export SOCKET_FCGI := /tmp/nginx-fcgi-benchmark.sock
 export SOCKET_UWSGI := /tmp/nginx-uwsgi-benchmark.sock
@@ -26,6 +26,31 @@ LUA=$(shell which lua)
 NGINX := nginx
 RESTY := openresty
 APACHE := apache2
+
+# Note: wrk2 is like Apache Benchmark but faster and supports HTTP1.1, which allows keep-alive to work with redbean server.
+# weighttp is another but it sometimes weirdly delays extra seconds at the end if -c != -t
+# You can set BENCHMARKER to httpress but:
+# - that fails to recognize keep-alive from redbean (I think it's a but in http-parser)
+# - the following patch works around this bug for redbean, but causes it to fail the other benchmarks
+#   - Patch: sed -i 's/ || !conn->keep_alive//g' httpress/httpress.c
+# - also fails some requests if -c >10
+# - and httpress has horrendous dependencies
+# wrk2 is best, but its results have to be converted to time for 50000 iterations to match other results
+# The important thing is that all 3 tools give very similar results, which works as a validator
+# Select wrk2, weighttp, or httpress:
+BENCHMARKER := wrk2
+BENCHMARK := weighttp/src/weighttp -k -n$(loops) -c10 -t10
+ifeq ($(BENCHMARKER), httpress)
+  BENCHMARK := httpress/bin/Release/httpress -kq -n$(loops) -c20 -p2
+endif
+ifeq ($(BENCHMARKER), wrk2)
+  # Optimal is approx -c10 and -t10. Much more than 40 and apache starts getting timeouts
+  BENCHMARK := wrk2/wrk -d2 -c10 -t10 -R 1000000
+endif
+
+# make sure CPU is cool before each benchmark
+CPUCOOL := sleep 5
+
 
 #The following line should, in theory, be faster with --async 100 or --processes 7, but it's slower. What am I missing about servers running in parallel on multiple cores?
 UWSGI_PLUGIN_DIR = uwsgi/lua5.1
@@ -45,55 +70,72 @@ STOP_FCGI := kill -9 `cat fcgi.pid` && rm -f fcgi.pid
 RUN_UWSGI = (uwsgi/uwsgi --plugin-dir $(UWSGI_PLUGIN_DIR) --ini uwsgi.ini &) && sleep 0.1
 STOP_UWSGI := killall uwsgi
 
-RUN_REDBEAN := ./redbean.com -p $(PORT_REDBEAN) -d -D www
+RUN_REDBEAN := ./redbean.com -p $(PORT_redbean) -d -D www
 STOP_REDBEAN := killall redbean.com
 
-IS_APACHE = $(shell lsof -i TCP:$(PORT_APACHE) &>/dev/null && echo yes)
-IS_RESTY = $(shell lsof -i TCP:$(PORT_RESTY) &>/dev/null && echo yes)
-IS_NGINX = $(shell lsof -i TCP:$(PORT_LWS) &>/dev/null && echo yes)
+IS_APACHE = $(shell lsof -i TCP:$(PORT_apache) &>/dev/null && echo yes)
+IS_RESTY = $(shell lsof -i TCP:$(PORT_resty) &>/dev/null && echo yes)
+IS_NGINX = $(shell lsof -i TCP:$(PORT_lws) &>/dev/null && echo yes)
 IS_FCGI = $(shell lsof -a -U -- $(SOCKET_FCGI) &>/dev/null && echo yes)
 IS_UWSGI = $(shell lsof -a -U -- $(SOCKET_UWSGI) &>/dev/null && echo yes)
-IS_REDBEAN = $(shell lsof -i TCP:$(PORT_REDBEAN) &>/dev/null && echo yes)
+IS_REDBEAN = $(shell lsof -i TCP:$(PORT_redbean) &>/dev/null && echo yes)
 
 UWSGI_SOURCE := https://github.com/unbit/uwsgi.git
+
+WEIGHTTP_SOURCE := https://github.com/lighttpd/weighttp.git
+WRK2_SOURCE := https://github.com/giltene/wrk2.git
+LWS_SOURCE := https://github.com/anaef/nginx-lws.git
 
 $(shell mkdir -p nginx/logs apache/logs nginx/modules)
 
 all: summary
 start: resty nginx apache uwsgi fcgi redbean
 stop: redbean-stop fcgi-stop uwsgi-stop apache-stop nginx-stop resty-stop
-reload: 
+reload:
 	@# Force .reload target to run
 	@touch nginx/conf/resty.conf
 	$(MAKE) .reload  --no-print-directory
-fetch: nginx-lws/config nginx-source/configure redbean.com
-build: build-nginx-lws
+build: build-nginx-lws resty nginx apache fcgi redbean uwsgi
 
-summary:
-	@$(MAKE) benchmark | egrep "^ab|Time taken|Benchmarking [^l]|^[ ]$$"
-benchmarks benchmark: benchmark-resty benchmark-lws benchmark-apache benchmark-fcgi benchmark-redbean
+summary: build
+	@# The sed filter below converts weighttp output to decimal seconds, zero-padding and converting ms to decimal
+	@# The awk filter below converts wrk2 output to speed of 50,000 requests -- to match results of other tools
+	@$(MAKE) benchmark | egrep --line-buffered "finished|weighttp/|Requests/sec:|loops:|Non-2xx|errors|Benchmarking [^l]|^[ ]$$" \
+		| sed -uE 's/ sec, ([0-9]+) millisec/\.00\1s/;s/\.0*([0-9]{3,})/\.\1/' \
+		| awk '!/^Requests.sec/ {print} /^Requests.sec: +[0-9.]+/ {printf "50000 requests in %fs\n",50000/$$2}'
+benchmarks benchmark: benchmark-redbean benchmark-resty benchmark-lws benchmark-apache benchmark-fcgi
 	@$(MAKE) benchmark-uwsgi-lua5.1  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-lua5.4  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-luajit  --no-print-directory
-benchmark-resty: test-resty
-	@echo "Benchmarking openresty LuaJIT"
-	ab -kq -c25 -n$(loops) -S "http://localhost:$(PORT_RESTY)/$(REQUEST)"
-	@echo " "
-benchmark-lws: test-lws
-	@echo "Benchmarking nginx-lws (Lua Web Services)"
-	ab -kq -c25 -n$(loops) -S "http://localhost:$(PORT_LWS)/$(REQUEST)"
-	@echo " "
-benchmark-apache: test-apache
-	@echo "Benchmarking apache mod-lua"
-	ab -kq -c30 -n$(loops) -S "http://localhost:$(PORT_APACHE)/$(REQUEST)"
-	@echo " "
-benchmark-fcgi: test-fcgi
-	@echo "Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')"
-	ab -kq -c10 -n$(loops) -S "http://localhost:$(PORT_FCGI)/$(REQUEST)"
-	@echo " "
-benchmark-redbean: test-redbean
+benchmark-redbean: test-redbean $(BENCHMARKER)
 	@echo "Benchmarking Redbean $(shell ./redbean.com -e 'print(_VERSION) os.exit()')"
-	ab -kq -c10 -n$(loops) -S "http://localhost:$(PORT_REDBEAN)/$(REQUEST)"
+	@$(CPUCOOL)
+	$(BENCHMARK) "http://localhost:$($(subst benchmark-,PORT_,$@))/$(REQUEST)"
+	@echo " "
+benchmark-resty: test-resty $(BENCHMARKER)
+	@echo "Benchmarking openresty LuaJIT"
+	@$(CPUCOOL)
+	$(BENCHMARK) "http://localhost:$($(subst benchmark-,PORT_,$@))/$(REQUEST)"
+	@echo " "
+benchmark-lws: test-lws $(BENCHMARKER)
+	@echo "Benchmarking nginx-lws (Lua Web Services)"
+	@$(CPUCOOL)
+	$(BENCHMARK) "http://localhost:$($(subst benchmark-,PORT_,$@))/$(REQUEST)"
+	@echo " "
+benchmark-apache: test-apache $(BENCHMARKER)
+	@echo "Benchmarking apache mod-lua"
+	@$(CPUCOOL)
+	$(BENCHMARK) "http://localhost:$($(subst benchmark-,PORT_,$@))/$(REQUEST)"
+	@echo " "
+benchmark-fcgi: test-fcgi $(BENCHMARKER)
+	@echo "Benchmarking FastCGI $(shell $(LUA) -e 'print(_VERSION)')"
+	@$(CPUCOOL)
+	$(BENCHMARK) "http://localhost:$($(subst benchmark-,PORT_,$@))/$(REQUEST)"
+	@echo " "
+benchmark-uwsgi: test-uwsgi $(BENCHMARKER)
+	@echo "Benchmarking $(UWSGI_PLUGIN_DIR)"
+	@$(CPUCOOL)
+	$(BENCHMARK) "http://localhost:$($(subst benchmark-,PORT_,$@))/$(REQUEST)"
 	@echo " "
 benchmark-uwsgi-lua5.1: UWSGI_PLUGIN_DIR=uwsgi/lua5.1
 benchmark-uwsgi-lua5.1: benchmark-uwsgi
@@ -101,12 +143,8 @@ benchmark-uwsgi-lua5.4: UWSGI_PLUGIN_DIR=uwsgi/lua5.4
 benchmark-uwsgi-lua5.4: benchmark-uwsgi
 benchmark-uwsgi-luajit:  UWSGI_PLUGIN_DIR=uwsgi/luajit
 benchmark-uwsgi-luajit:  benchmark-uwsgi
-benchmark-uwsgi: test-uwsgi
-	@echo "Benchmarking $(UWSGI_PLUGIN_DIR)"
-	ab -kq -c100 -n$(loops) -S "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
-	@echo " "
 
-test: test-resty test-apache test-fcgi
+test: test-resty test-lws test-apache test-fcgi test-redbean test-uwsgi
 	@echo Testing uWSGI server with Lua5.1
 	@$(MAKE) test-uwsgi-lua5.1  --no-print-directory
 	@echo Testing uWSGI server with Lua5.4
@@ -115,34 +153,34 @@ test: test-resty test-apache test-fcgi
 	@$(MAKE) test-uwsgi-luajit  --no-print-directory
 test-resty: resty
 	@echo "Testing resty server"
-	curl -fsS "http://localhost:$(PORT_RESTY)/$(REQUEST)"
-test-lws: build nginx
+	curl -fsS "http://localhost:$($(subst test-,PORT_,$@))/$(REQUEST)"
+test-lws: nginx
 	@echo "Testing nginx-lws (Lua Web Services) server"
-	curl -fsS "http://localhost:$(PORT_LWS)/$(REQUEST)"
+	curl -fsS "http://localhost:$($(subst test-,PORT_,$@))/$(REQUEST)"
 test-apache: apache
 	@echo "Testing apache server"
-	curl -fsS "http://localhost:$(PORT_APACHE)/$(REQUEST)"
+	curl -fsS "http://localhost:$($(subst test-,PORT_,$@))/$(REQUEST)"
 test-fcgi: resty fcgi
 	@echo "Testing fcgi server"
-	curl -fsS "http://localhost:$(PORT_FCGI)/$(REQUEST)"
+	curl -fsS "http://localhost:$($(subst test-,PORT_,$@))/$(REQUEST)"
 test-redbean: redbean
 	@echo "Testing redbean server"
-	curl -fsS "http://localhost:$(PORT_REDBEAN)/$(REQUEST)"
+	curl -fsS "http://localhost:$($(subst test-,PORT_,$@))/$(REQUEST)"
+test-uwsgi: resty uwsgi
+	@echo "Testing uWSGI server"
+	curl -fsS "http://localhost:$($(subst test-,PORT_,$@))/$(REQUEST)"
 test-uwsgi-lua5.1: UWSGI_PLUGIN_DIR=uwsgi/lua5.1
 test-uwsgi-lua5.1: test-uwsgi
 test-uwsgi-lua5.4: UWSGI_PLUGIN_DIR=uwsgi/lua5.4
 test-uwsgi-lua5.4: test-uwsgi
 test-uwsgi-luajit:  UWSGI_PLUGIN_DIR=uwsgi/luajit
 test-uwsgi-luajit:  test-uwsgi
-test-uwsgi: resty uwsgi
-	@echo "Testing uWSGI server"
-	curl -fsS "http://localhost:$(PORT_UWSGI)/$(REQUEST)"
 
 resty: nginx/logs/resty.pid .reload
 	$(if $(IS_RESTY), , $(RUN_RESTY))
 nginx/logs/resty.pid:
 	$(RUN_RESTY)
-.reload: nginx/conf/resty.conf nginx/conf/nginx.conf apache/httpd.conf Makefile www/*.lua
+.reload: nginx/conf/resty.conf nginx/conf/nginx.conf apache/httpd.conf Makefile www/*.lua redbean.com
 	@echo Reloading server config
 	@touch .reload
 	$(if $(IS_RESTY), $(RUN_RESTY) -s reload && sleep 0.1, $(RUN_RESTY))
@@ -162,7 +200,7 @@ nginx: nginx/logs/nginx.pid .reload
 	$(if $(IS_NGINX), , $(RUN_NGINX))
 nginx/logs/nginx.pid:
 	$(RUN_NGINX)
-nginx-stop:
+nginx-stop: build-nginx-lws
 	$(if $(IS_NGINX), $(STOP_NGINX))
 
 apache: apache/logs/apache.pid .reload
@@ -216,24 +254,21 @@ build-nginx-lws: nginx-source/objs/lws_module.so
 nginx-source/objs/lws_module.so: nginx-source/Makefile
 	$(MAKE) -C nginx-source modules
 	cp $@ nginx/modules/lws_module.so
-#export LUAJIT_LIB="/usr/local/openresty/luajit/lib/"
-#export LUAJIT_INC="../LuaJIT-2.1-20230410/src/"
 nginx-source/Makefile: nginx-source/configure nginx-lws/config
 	sed -ie "s/lws_lua=lua.*/lws_lua=lua$(LWS_LUA_VERSION)/" nginx-lws/config
 	cd nginx-source && ./configure --with-compat --with-threads --add-dynamic-module=../nginx-lws $(DEBUG_LOGGING)
-#export LUAJIT_LIB=../luajit2/src
-#export LUAJIT_INC=../luajit2/src
-#./configure --with-ld-opt="-Wl,-rpath,../luajit2/src" --add-module=../ngx_devel_kit --add-module=../lua-nginx-module --with-compat --with-threads --add-dynamic-module=../nginx-lws
-#--with-cc-opt="-I/usr/include/lua5.4"  --with-ld-opt="-llua5.4"
-# --prefix=/opt/nginx --with-ld-opt="-Wl,-rpath,/path/to/luajit/lib" --add-module=/path/to/ngx_devel_kit --add-module=/path/to/lua-nginx-module
-# --prefix=/usr/local/openresty/nginx --with-cc-opt='-O2 -DNGX_LUA_ABORT_AT_PANIC -I/usr/local/openresty/zlib/include -I/usr/local/openresty/pcre/include -I/usr/local/openresty/openssl111/include' --add-module=../ngx_devel_kit-0.3.2 --add-module=../echo-nginx-module-0.63 --add-module=../xss-nginx-module-0.06 --add-module=../ngx_coolkit-0.2 --add-module=../set-misc-nginx-module-0.33 --add-module=../form-input-nginx-module-0.12 --add-module=../encrypted-session-nginx-module-0.09 --add-module=../srcache-nginx-module-0.33 --add-module=../ngx_lua-0.10.25 --add-module=../ngx_lua_upstream-0.07 --add-module=../headers-more-nginx-module-0.34 --add-module=../array-var-nginx-module-0.06 --add-module=../memc-nginx-module-0.19 --add-module=../redis2-nginx-module-0.15 --add-module=../redis-nginx-module-0.3.9 --add-module=../ngx_stream_lua-0.0.13 --with-ld-opt='-Wl,-rpath,/usr/local/openresty/luajit/lib -L/usr/local/openresty/zlib/lib -L/usr/local/openresty/pcre/lib -L/usr/local/openresty/openssl111/lib -Wl,-rpath,/usr/local/openresty/zlib/lib:/usr/local/openresty/pcre/lib:/usr/local/openresty/openssl111/lib' --with-pcre-jit --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-http_v2_module --without-mail_pop3_module --without-mail_imap_module --without-mail_smtp_module --with-http_stub_status_module --with-http_realip_module --with-http_addition_module --with-http_auth_request_module --with-http_secure_link_module --with-http_random_index_module --with-http_gzip_static_module --with-http_sub_module --with-http_dav_module --with-http_flv_module --with-http_mp4_module --with-http_gunzip_module --with-threads --with-stream --with-http_ssl_module
 nginx-source/configure:
 	curl https://$(NGINX_NAME).org/download/$(NGINX_VERSION).tar.gz >$(NGINX_VERSION).tar.gz
 	tar -xzf $(NGINX_VERSION).tar.gz
 	mv $(NGINX_VERSION) nginx-source
 nginx-lws/config:
-	git clone https://github.com/anaef/nginx-lws.git
+	git clone $(LWS_SOURCE) nginx-lws
 
+
+wrk2: wrk2/Makefile
+	$(MAKE) -c wrk2
+wrk2/Makefile:
+	git clone $(WRK2_SOURCE) wrk2
 
 UBUNTU_BASED := $(shell grep UBUNTU /etc/os-release)
 REDBEAN_VERSION := latest
@@ -251,12 +286,46 @@ redbean.com:
  endif
 	./redbean.com --assimilate
 
+weighttp: weighttp/src/weighttp
+weighttp/src/weighttp: weighttp/Makefile.am
+	cd weighttp && ./autogen.sh && ./configure
+	$(MAKE) -C weighttp
+weighttp/Makefile.am:
+	@echo Fetching $(dir $@)
+	git clone "$(WEIGHTTP_SOURCE)" $(dir $@)
+
+# Built httpress -- complicated because of all its dependencies
+HP_INCLUDES := C_INCLUDE_PATH="$$C_INCLUDE_PATH../libparserutils/include" LIBRARY_PATH="$$LIBRARY_PATH:../libparserutils/release/lib"  
+httpress: httpress/bin/Release/httpress
+httpress/bin/Release/httpress: httpress/Makefile libparserutils
+	$(HP_INCLUDES) $(MAKE) -C httpress  CC="gcc -Wno-format -Wno-deprecated-declarations"
+httpress/Makefile:
+	git clone https://github.com/virtuozzo/httpress.git
+libparserutils: libparserutils/Makefile
+	$(MAKE) -C libparserutils install PREFIX=release NSSHARED=../buildsystem
+libparserutils/Makefile:
+	git clone https://git.netsurf-browser.org/buildsystem.git  # required to build libparserutils
+	git clone git://git.netsurf-browser.org/libparserutils.git
+
+#Legacy builds no longer needed with: apt install libhttp-parser-dev libuchardet-dev 
+http-parser: http-parser/Makefile
+	$(MAKE) -C http-parser library
+http-parser/Makefile:
+	git clone https://github.com/nodejs/http-parser.git
+uchardet: uchardet/uchardet/uchardet.h
+uchardet/uchardet/uchardet.h: uchardet/CMakeLists.txt
+	cd uchardet && ln -sf src uchardet
+uchardet/CMakeLists.txt:
+	git clone https://github.com/BYVoid/uchardet.git
+
 clean:
-	rm -f fcgi.pid uwsgi.log nginx/logs/*.pid
+	rm -f uwsgi.log
 	rm -rf uwsgi/uwsgi uwsgi/lua5.1 uwsgi/luajit
 	rm -f nginx-*.tar.gz
 	rm -rf nginx-source/Makefile nginx-source/objs nginx/modules/lws_module.so
 	rm -f redbean.com
+	rm -rf weighttp
+	rm -rf hp httpress libparseutils
 	$(MAKE) -C uwsgi clean  --no-print-directory
 
 # Define a newline macro -- only way to use use \n in info output. Note: needs two newlines after 'define' line
@@ -277,4 +346,6 @@ vars:
 .PHONY: nginx nginx-stop resty resty-stop
 .PHONY: fcgi fcgi-stop
 .PHONY: uwsgi uwsgi-stop build-uwsgi
-.PHONY: build build-nginx-lws fetch
+.PHONY: build build-nginx-lws
+.PHONY: httpress libparserutils http-parser uchardet
+.PHONY: weighttp
