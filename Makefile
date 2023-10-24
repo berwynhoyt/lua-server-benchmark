@@ -351,3 +351,4 @@ vars:
 .PHONY: build build-nginx-lws
 .PHONY: httpress http-parser uchardet
 .PHONY: weighttp
+.PHONY: wrk2
