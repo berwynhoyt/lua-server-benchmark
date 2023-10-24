@@ -95,14 +95,16 @@ reload:
 	@# Force .reload target to run
 	@touch nginx/conf/resty.conf
 	$(MAKE) .reload  --no-print-directory
-build: build-nginx-lws resty nginx apache fcgi redbean uwsgi
+build: build-nginx-lws resty nginx apache fcgi redbean uwsgi $(BENCHMARKER)
 
 summary: build
-	@# The sed filter below converts weighttp output to decimal seconds, zero-padding and converting ms to decimal
-	@# The awk filter below converts wrk2 output to speed of 50,000 requests -- to match results of other tools
-	@$(MAKE) benchmark | egrep --line-buffered "finished|weighttp/|Requests/sec:|loops:|Non-2xx|errors|Benchmarking [^l]|^[ ]$$" \
-		| sed -uE 's/ sec, ([0-9]+) millisec/\.00\1s/;s/\.0*([0-9]{3,})/\.\1/' \
-		| awk '!/^Requests.sec/ {print} /^Requests.sec: +[0-9.]+/ {printf "50000 requests in %fs\n",50000/$$2}'
+	@$(MAKE) benchmark | egrep --line-buffered "$(BENCHMARKER)/|[Rr]eq.{0,5}/s|Non-2xx|errors|Benchmarking [^l]|^[ ]$$" | tee temp.txt
+	@$(MAKE) results.csv  --no-print-directory
+results.csv: temp.txt
+	@echo "Requests/sec,Server" >results.csv
+	@cat temp.txt | sed -nE '/Benchmarking/h;G;s|.* ([0-9.]+)[ }]+[Rr]eq.{0,5}/s.*\nBenchmarking (.*)|\1,"\2"|p;s|Requests/sec[: ]+([0-9.]+).*\nBenchmarking (.*)|\1,"\2"|p' >>results.csv
+	@rm temp.txt
+	@echo Results in results.csv
 benchmarks benchmark: benchmark-redbean benchmark-resty benchmark-lws benchmark-apache benchmark-fcgi
 	@$(MAKE) benchmark-uwsgi-lua5.1  --no-print-directory
 	@$(MAKE) benchmark-uwsgi-lua5.4  --no-print-directory
@@ -265,8 +267,9 @@ nginx-lws/config:
 	git clone $(LWS_SOURCE) nginx-lws
 
 
-wrk2: wrk2/Makefile
-	$(MAKE) -c wrk2
+wrk2: wrk2/wrk
+wrk2/wrk: wrk2/Makefile
+	$(MAKE) -C wrk2
 wrk2/Makefile:
 	git clone $(WRK2_SOURCE) wrk2
 
@@ -297,15 +300,15 @@ weighttp/Makefile.am:
 # Built httpress -- complicated because of all its dependencies
 HP_INCLUDES := C_INCLUDE_PATH="$$C_INCLUDE_PATH../libparserutils/include" LIBRARY_PATH="$$LIBRARY_PATH:../libparserutils/release/lib"  
 httpress: httpress/bin/Release/httpress
-httpress/bin/Release/httpress: httpress/Makefile libparserutils
+httpress/bin/Release/httpress: httpress/Makefile libparserutils/release/lib/libparserutils.a
 	$(HP_INCLUDES) $(MAKE) -C httpress  CC="gcc -Wno-format -Wno-deprecated-declarations"
 httpress/Makefile:
 	git clone https://github.com/virtuozzo/httpress.git
-libparserutils: libparserutils/Makefile
+libparserutils/release/lib/libparserutils.a: libparserutils/Makefile
 	$(MAKE) -C libparserutils install PREFIX=release NSSHARED=../buildsystem
 libparserutils/Makefile:
-	git clone https://git.netsurf-browser.org/buildsystem.git  # required to build libparserutils
 	git clone git://git.netsurf-browser.org/libparserutils.git
+	git clone git://git.netsurf-browser.org/buildsystem.git  # required to build libparserutils
 
 #Legacy builds no longer needed with: apt install libhttp-parser-dev libuchardet-dev 
 http-parser: http-parser/Makefile
@@ -323,9 +326,8 @@ clean:
 	rm -rf uwsgi/uwsgi uwsgi/lua5.1 uwsgi/luajit
 	rm -f nginx-*.tar.gz
 	rm -rf nginx-source/Makefile nginx-source/objs nginx/modules/lws_module.so
-	rm -f redbean.com
-	rm -rf weighttp
-	rm -rf hp httpress libparseutils
+	rm -f redbean.com cosmopolitan
+	rm -rf wrk2 weighttp httpress libparserutils buildsystem
 	$(MAKE) -C uwsgi clean  --no-print-directory
 
 # Define a newline macro -- only way to use use \n in info output. Note: needs two newlines after 'define' line
@@ -347,5 +349,5 @@ vars:
 .PHONY: fcgi fcgi-stop
 .PHONY: uwsgi uwsgi-stop build-uwsgi
 .PHONY: build build-nginx-lws
-.PHONY: httpress libparserutils http-parser uchardet
+.PHONY: httpress http-parser uchardet
 .PHONY: weighttp
