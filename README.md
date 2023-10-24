@@ -2,7 +2,9 @@
 
 ## Results
 
-![50,000 Requests](https://docs.google.com/spreadsheets/d/e/2PACX-1vRk18zYXH0Yvx6KKWqO0Ypkedfg06G99nfV5l8uMVQc8s_hxS1N84vXetsiQE9S6teU3PoIYwPjVRHU/pubchart?oid=795106361&format=image)
+![Requests/sec](https://docs.google.com/spreadsheets/d/e/2PACX-1vRk18zYXH0Yvx6KKWqO0Ypkedfg06G99nfV5l8uMVQc8s_hxS1N84vXetsiQE9S6teU3PoIYwPjVRHU/pubchart?oid=795106361&format=image)
+
+(You can view this graph as [time-for-50,000-requests](https://docs.google.com/spreadsheets/d/e/2PACX-1vRk18zYXH0Yvx6KKWqO0Ypkedfg06G99nfV5l8uMVQc8s_hxS1N84vXetsiQE9S6teU3PoIYwPjVRHU/pubchart?oid=734804502&format=image) here).
 
 The benchmark results on a quad-core i7-8565 @1.8GHz are as follows, where 8081 is port serving OpenResty's Lua and 8082 is PUC Lua via FastCGI:
 
