@@ -1,4 +1,4 @@
-# Runner up best tool. Good results, but have to tune amount of parallel requests or there are slowdowns and failures:
+# Good results, but have to tune amount of parallel requests or there are slowdowns and failures:
 #  (.e.g Apache is twice as fast with -p <= 4, FCGI at -p <= 10, uWSGI fails responses unless -p <= 12; other servers best at -p15)
 # Note: must specify -U5 to get accurate results
 hurl/build/src/hurl/hurl "http://localhost:8080/multiply?a=2&b=3" -U5 -f50000 -t8 -p4 "$@" | egrep "seconds| --"
