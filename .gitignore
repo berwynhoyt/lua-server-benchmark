@@ -2,8 +2,7 @@ fcgi.pid
 nginx/logs
 nginx/modules
 apache/logs
-nginx-lws
-nginx-source
+nginx-*
 uwsgi
 redbean.com
 .reload
