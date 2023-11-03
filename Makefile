@@ -70,7 +70,8 @@ STOP_FCGI := kill -9 `cat fcgi.pid` && rm -f fcgi.pid
 RUN_UWSGI = (uwsgi/uwsgi --plugin-dir $(UWSGI_PLUGIN_DIR) --ini uwsgi.ini &) && sleep 0.1
 STOP_UWSGI := killall uwsgi
 
-RUN_REDBEAN := ./redbean.com -p $(PORT_redbean) -d -D www
+#To see redbean errors, add: -L /dev/stdout
+RUN_REDBEAN := ./redbean.com -l localhost -p $(PORT_redbean) -d -D www
 STOP_REDBEAN := killall redbean.com
 
 IS_APACHE = $(shell lsof -i TCP:$(PORT_apache) &>/dev/null && echo yes)
