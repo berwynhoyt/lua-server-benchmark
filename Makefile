@@ -27,17 +27,17 @@ NGINX := nginx
 RESTY := openresty
 APACHE := apache2
 
+# Set BENCHMARKER to: wrk2, weighttp, or httpress
 # Note: wrk2 is like Apache Benchmark but faster and supports HTTP1.1, which allows keep-alive to work with redbean server.
-# weighttp is another but it sometimes weirdly delays extra seconds at the end if -c != -t
-# You can set BENCHMARKER to httpress but:
-# - that fails to recognize keep-alive from redbean (I think it's a but in http-parser)
+# weighttp is another but with redbean, last request weirdly sometimes takes seconds to return, giving you low req/sec. More likely to work with -c10 -t10
+# But see the tool gotchas at https://hashnode.com/edit/clo3x5sks000f08kyhm8idirv
+# In addition, with httpress, note:
+# - fails to recognize keep-alive from redbean (I think it's a but in http-parser)
 # - the following patch works around this bug for redbean, but causes it to fail the other benchmarks
 #   - Patch: sed -i 's/ || !conn->keep_alive//g' httpress/httpress.c
 # - also fails some requests if -c >10
 # - and httpress has horrendous dependencies
-# wrk2 is best, but its results have to be converted to time for 50000 iterations to match other results
 # The important thing is that all 3 tools give very similar results, which works as a validator
-# Select wrk2, weighttp, or httpress:
 BENCHMARKER := wrk2
 BENCHMARK := weighttp/src/weighttp -k -n$(loops) -c10 -t10
 ifeq ($(BENCHMARKER), httpress)
@@ -70,7 +70,8 @@ STOP_FCGI := kill -9 `cat fcgi.pid` && rm -f fcgi.pid
 RUN_UWSGI = (uwsgi/uwsgi --plugin-dir $(UWSGI_PLUGIN_DIR) --ini uwsgi.ini &) && sleep 0.1
 STOP_UWSGI := killall uwsgi
 
-RUN_REDBEAN := ./redbean.com -p $(PORT_redbean) -d -D www
+#To see redbean errors, add: -L /dev/stdout
+RUN_REDBEAN := ./redbean.com -l localhost -p $(PORT_redbean) -d -D www
 STOP_REDBEAN := killall redbean.com
 
 IS_APACHE = $(shell lsof -i TCP:$(PORT_apache) &>/dev/null && echo yes)
@@ -326,7 +327,7 @@ clean:
 	rm -rf uwsgi/uwsgi uwsgi/lua5.1 uwsgi/luajit
 	rm -f nginx-*.tar.gz
 	rm -rf nginx-source/Makefile nginx-source/objs nginx/modules/lws_module.so
-	rm -f redbean.com cosmopolitan
+	rm -rf redbean.com cosmopolitan
 	rm -rf wrk2 weighttp httpress libparserutils buildsystem
 	$(MAKE) -C uwsgi clean  --no-print-directory
 
